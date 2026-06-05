@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>The Art of Resilience — Flood AR</title>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { overflow: hidden; font-family: Arial, sans-serif; background: #000; }
+
+      /* ── TAR TITLE — top left, minimal ── */
+      #tar-title {
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        z-index: 999;
+        font-size: 11px;
+        font-weight: bold;
+        color: rgba(255,255,255,0.7);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        pointer-events: none;
+      }
+
+      /* ── SCENARIO LABEL — top right, compact ── */
+      #scenario-label {
+        position: fixed;
+        top: 10px;
+        right: 10px;
+        z-index: 999;
+        text-align: right;
+        pointer-events: none;
+      }
+      #label-title {
+        font-size: 13px;
+        font-weight: bold;
+        color: white;
+        line-height: 1.2;
+      }
+      #label-level {
+        font-size: 10px;
+        font-weight: bold;
+        color: var(--sc, #4A9ECC);
+        margin-top: 2px;
+      }
+
+      /* ── FACTOR PANEL — slides in from left ── */
+      #factor-tab {
+        position: fixed;
+        left: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 999;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+      }
+
+      /* The panel including the heading slides in/out together */
+      #factor-panel {
+        background: rgba(10,18,32,0.95);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-left: none;
+        border-radius: 0 10px 10px 0;
+        padding: 12px 10px;
+        min-width: 140px;
+        transition: transform 0.3s ease, opacity 0.3s ease;
+        transform: translateX(0);
+        opacity: 1;
+      }
+      #factor-panel.hidden {
+        transform: translateX(-160px);
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      #factor-panel h4 {
+        font-size: 9px;
+        letter-spacing: 0.12em;
+        color: #8DBFE8;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+        text-align: center;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        padding-bottom: 6px;
+      }
+
+      .factor-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        gap: 8px;
+      }
+      .factor-name {
+        font-size: 10px;
+        color: #C0D4E8;
+        flex: 1;
+        font-weight: bold;
+      }
+      .factor-pip {
+        width: 11px; height: 11px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .factor-val {
+        font-size: 9px;
+        font-weight: bold;
+        min-width: 56px;
+        text-align: right;
+      }
+
+      .pip-green  { background: #2ECC71; box-shadow: 0 0 5px #2ECC71; }
+      .pip-orange { background: #E67E22; box-shadow: 0 0 5px #E67E22; }
+      .pip-red    { background: #C0392B; box-shadow: 0 0 5px #C0392B; }
+      .val-green  { color: #2ECC71; }
+      .val-orange { color: #E67E22; }
+      .val-red    { color: #C0392B; }
+
+      /* Toggle arrow — stays visible always, slides when panel opens/closes */
+      #factor-toggle {
+        width: 20px;
+        background: rgba(10,18,32,0.92);
+        border: 1px solid rgba(255,255,255,0.15);
+        border-left: none;
+        border-radius: 0 6px 6px 0;
+        padding: 18px 4px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+      }
+      #toggle-arrow {
+        font-size: 11px;
+        color: #8DBFE8;
+        transition: transform 0.3s ease;
+      }
+      #toggle-arrow.open { transform: rotate(180deg); }
+
+      /* ── DEPTH SCALE BAR ── */
+      #scale {
+        position: fixed;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+      }
+      #scale-top, #scale-bot {
+        font-size: 9px;
+        color: #8DBFE8;
+        font-weight: bold;
+      }
+      #scale-bar {
+        width: 12px;
+        height: 140px;
+        background: linear-gradient(to bottom, #6B0010, #934220, #1A2E4A, #2564A8, #1A6634);
+        border-radius: 6px;
+        border: 1px solid rgba(255,255,255,0.2);
+        position: relative;
+      }
+      #scale-marker {
+        position: absolute;
+        left: -5px;
+        width: 22px;
+        height: 3px;
+        background: white;
+        border-radius: 2px;
+        box-shadow: 0 0 4px rgba(255,255,255,0.8);
+        transition: top 0.5s ease;
+      }
+      #scale-lbl {
+        font-size: 9px;
+        color: white;
+        text-align: center;
+      }
+
+      /* ── TAP PROMPT ── */
+      #prompt {
+        position: fixed;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(10,18,32,0.88);
+        color: white;
+        padding: 18px 26px;
+        border-radius: 12px;
+        font-size: 15px;
+        text-align: center;
+        z-index: 999;
+        pointer-events: none;
+        border: 1px solid rgba(74,124,181,0.5);
+        line-height: 1.5;
+      }
+      #prompt span {
+        display: block;
+        font-size: 11px;
+        color: #8DBFE8;
+        margin-top: 6px;
+      }
+
+      /* ── FILTER BEDS BADGE ── */
+      #fb-badge {
+        position: fixed;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(26,102,52,0.94);
+        color: white;
+        padding: 20px 22px;
+        border-radius: 12px;
+        font-size: 11.5px;
+        text-align: center;
+        z-index: 999;
+        max-width: 280px;
+        display: none;
+        line-height: 1.55;
+        border: 1px solid rgba(255,255,255,0.25);
+      }
+      #fb-badge strong {
+        display: block;
+        font-size: 13px;
+        margin-bottom: 8px;
+      }
+
+      /* ── BOTTOM PANEL ── */
+      #bottom-panel {
+        position: fixed;
+        bottom: 0; left: 0;
+        width: 100%;
+        z-index: 999;
+        background: rgba(10,18,32,0.95);
+        border-top: 1px solid rgba(74,124,181,0.3);
+        padding: 7px 8px 10px;
+      }
+
+      #scenario-grid {
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        gap: 4px;
+        margin-bottom: 7px;
+      }
+      .s-btn {
+        padding: 5px 2px 4px;
+        border: none;
+        border-radius: 5px;
+        font-size: 10px;
+        font-weight: bold;
+        color: rgba(255,255,255,0.65);
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.2s;
+        border-bottom: 3px solid transparent;
+        line-height: 1.3;
+      }
+      .s-btn .s-code { display: block; font-size: 11px; color: white; }
+      .s-btn .s-lvl  { display: block; font-size: 8px; color: rgba(255,255,255,0.5); margin-top: 1px; }
+      .s-btn.active  {
+        color: white;
+        border-bottom-color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      }
+
+      #nav-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+      }
+      .nav-btn {
+        width: 50px; height: 50px;
+        border-radius: 50%;
+        border: 2px solid rgba(255,255,255,0.25);
+        background: rgba(255,255,255,0.06);
+        color: white;
+        font-size: 22px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: all 0.15s;
+      }
+      .nav-btn:active { background: rgba(255,255,255,0.18); transform: scale(0.92); }
+      #nav-info { text-align: center; flex: 1; max-width: 180px; }
+      #nav-name    { font-size: 13px; font-weight: bold; color: white; line-height: 1.2; }
+      #nav-counter { font-size: 10px; color: #8DBFE8; margin-top: 3px; letter-spacing: 0.06em; }
+    </style>
+  </head>
+  <body>
+
+    <!-- Minimal title top left -->
+    <div id="tar-title">The Art of Resilience</div>
+
+    <!-- Scenario label top right -->
+    <div id="scenario-label">
+      <div id="label-title">S01 — Present Day</div>
+      <div id="label-level">4.8m AOD · +0m</div>
+    </div>
+
+    <!-- Factor panel — slides from left -->
+    <div id="factor-tab">
+      <div id="factor-panel">
+        <h4>Flood Factors</h4>
+        <div class="factor-row">
+          <span class="factor-name">Surface</span>
+          <div class="factor-pip pip-orange" id="pip-surface"></div>
+          <span class="factor-val val-orange" id="val-surface">Mixed</span>
+        </div>
+        <div class="factor-row">
+          <span class="factor-name">Density</span>
+          <div class="factor-pip pip-orange" id="pip-density"></div>
+          <span class="factor-val val-orange" id="val-density">Medium</span>
+        </div>
+        <div class="factor-row">
+          <span class="factor-name">Sewage</span>
+          <div class="factor-pip pip-orange" id="pip-sewage"></div>
+          <span class="factor-val val-orange" id="val-sewage">Limited</span>
+        </div>
+        <div class="factor-row">
+          <span class="factor-name">Trees</span>
+          <div class="factor-pip pip-orange" id="pip-trees"></div>
+          <span class="factor-val val-orange" id="val-trees">Some</span>
+        </div>
+      </div>
+      <div id="factor-toggle" onclick="togglePanel()">
+        <div id="toggle-arrow" class="open">&#9664;</div>
+      </div>
+    </div>
+
+    <!-- Depth scale right side -->
+    <div id="scale">
+      <span id="scale-top">7.5m</span>
+      <div id="scale-bar"><div id="scale-marker" style="top:92%"></div></div>
+      <span id="scale-bot">4.6m</span>
+      <span id="scale-lbl">AOD</span>
+    </div>
+
+    <!-- Tap prompt -->
+    <div id="prompt">
+      Point at any flat surface
+      <span>Tap the surface to place the flood</span>
+    </div>
+
+    <!-- Filter beds badge -->
+    <div id="fb-badge">
+      <strong>S08 · Spatial Intervention Zone</strong>
+      The Thames Water Victorian filter beds provide 26,000m³ storage capacity across 14.24km². Water surface reduction of 1.83mm falls below EA LiDAR DTM vertical accuracy. Visualises where natural flood mitigation capacity exists.
+    </div>
+
+    <!-- A-Frame scene -->
+    <a-scene
+      embedded
+      arjs="sourceType: webcam; debugUIEnabled: false;"
+      renderer="logarithmicDepthBuffer: true;"
+      vr-mode-ui="enabled: false">
+
+      <a-camera></a-camera>
+
+      <a-entity id="anchor" visible="false">
+
+        <a-plane id="water"
+          position="0 0 0" rotation="-90 0 0"
+          width="3" height="3"
+          color="#2564A8"
+          transparent="true" opacity="0.65"
+          animation="property: material.opacity; from: 0.50; to: 0.76;
+                     dur: 2600; dir: alternate; loop: true">
+        </a-plane>
+
+        <a-torus id="ring"
+          position="0 0.01 0" rotation="-90 0 0"
+          radius="0.85" radius-tubular="0.012"
+          color="#4A9ECC" transparent="true" opacity="0.7"
+          animation="property: rotation; to: -90 360 0;
+                     dur: 9000; loop: true; easing: linear">
+        </a-torus>
+
+        <a-circle id="filterzone"
+          position="0 0.004 0" rotation="-90 0 0"
+          radius="1.3" color="#1A6634"
+          transparent="true" opacity="0" visible="false"
+          animation="property: material.opacity; from: 0.15; to: 0.55;
+                     dur: 2800; dir: alternate; loop: true">
+        </a-circle>
+
+      </a-entity>
+    </a-scene>
+
+    <!-- Bottom panel -->
+    <div id="bottom-panel">
+      <div id="scenario-grid">
+        <button class="s-btn active" id="sb0" onclick="setScenario(0)" style="background:#1A2E4A">
+          <span class="s-code">S01</span><span class="s-lvl">4.8m</span>
+        </button>
+        <button class="s-btn" id="sb1" onclick="setScenario(1)" style="background:#2564A8">
+          <span class="s-code">S02</span><span class="s-lvl">5.0m</span>
+        </button>
+        <button class="s-btn" id="sb2" onclick="setScenario(2)" style="background:#4D4FA1">
+          <span class="s-code">S03</span><span class="s-lvl">5.1m</span>
+        </button>
+        <button class="s-btn" id="sb3" onclick="setScenario(3)" style="background:#654EA0">
+          <span class="s-code">S04</span><span class="s-lvl">5.2m</span>
+        </button>
+        <button class="s-btn" id="sb4" onclick="setScenario(4)" style="background:#A11C32">
+          <span class="s-code">S05</span><span class="s-lvl">5.3m</span>
+        </button>
+        <button class="s-btn" id="sb5" onclick="setScenario(5)" style="background:#7E1416">
+          <span class="s-code">S06</span><span class="s-lvl">5.7m</span>
+        </button>
+        <button class="s-btn" id="sb6" onclick="setScenario(6)" style="background:#934220">
+          <span class="s-code">S07</span><span class="s-lvl">7.5m</span>
+        </button>
+        <button class="s-btn" id="sb7" onclick="setScenario(7)" style="background:#1A6634">
+          <span class="s-code">S08</span><span class="s-lvl">Zone</span>
+        </button>
+      </div>
+
+      <div id="nav-row">
+        <button class="nav-btn" onclick="prevScenario()">&#8592;</button>
+        <div id="nav-info">
+          <div id="nav-name">Present Day</div>
+          <div id="nav-counter">1 of 8</div>
+        </div>
+        <button class="nav-btn" onclick="nextScenario()">&#8594;</button>
+      </div>
+    </div>
+
+    <script>
+      var FACTORS = [
+        { surface:{cls:"orange",val:"Mixed"},    density:{cls:"orange",val:"Medium"},   sewage:{cls:"orange",val:"Limited"},     trees:{cls:"orange",val:"Some"} },
+        { surface:{cls:"orange",val:"Mixed"},    density:{cls:"orange",val:"Med-High"}, sewage:{cls:"orange",val:"Limited"},     trees:{cls:"orange",val:"Some"} },
+        { surface:{cls:"red",   val:"Imperm."},  density:{cls:"red",   val:"High"},     sewage:{cls:"orange",val:"Limited"},     trees:{cls:"orange",val:"Lower"} },
+        { surface:{cls:"red",   val:"Imperm."},  density:{cls:"red",   val:"High"},     sewage:{cls:"red",   val:"Blocked"},     trees:{cls:"orange",val:"Lower"} },
+        { surface:{cls:"red",   val:"Imperm."},  density:{cls:"red",   val:"High"},     sewage:{cls:"red",   val:"Blocked"},     trees:{cls:"red",   val:"None"} },
+        { surface:{cls:"red",   val:"Imperm."},  density:{cls:"red",   val:"V. High"},  sewage:{cls:"red",   val:"Failed"},      trees:{cls:"red",   val:"None"} },
+        { surface:{cls:"red",   val:"Imperm."},  density:{cls:"red",   val:"V. High"},  sewage:{cls:"orange",val:"Overwhelmed"}, trees:{cls:"red",   val:"None"} },
+        { surface:{cls:"green", val:"Permeable"},density:{cls:"green", val:"Low"},      sewage:{cls:"green", val:"Restored"},    trees:{cls:"green", val:"High"} }
+      ];
+
+      var SCENARIOS = [
+        { name:"S01 — Present Day",        short:"Present Day",  level:4.8,  adj:"+0m",    color:"#1A2E4A", water:"#2564A8", opacity:0.60, fb:false },
+        { name:"S02 — 2050 Conservative",  short:"2050 Low",     level:5.0,  adj:"+0.2m",  color:"#2564A8", water:"#1E5898", opacity:0.63, fb:false },
+        { name:"S03 — Development",        short:"Development",  level:5.1,  adj:"+0.3m",  color:"#4D4FA1", water:"#3D3F91", opacity:0.65, fb:false },
+        { name:"S04 — 2050 High",          short:"2050 High",    level:5.2,  adj:"+0.4m",  color:"#654EA0", water:"#553E90", opacity:0.67, fb:false },
+        { name:"S05 — 2100 Conservative",  short:"2100 Low",     level:5.3,  adj:"+0.5m",  color:"#A11C32", water:"#910C22", opacity:0.70, fb:false },
+        { name:"S06 — 2100 High",          short:"2100 High",    level:5.7,  adj:"+0.9m",  color:"#7E1416", water:"#6E0406", opacity:0.74, fb:false },
+        { name:"S07 — 2100 Extreme",       short:"Extreme",      level:7.5,  adj:"+2.7m",  color:"#934220", water:"#3A1A08", opacity:0.86, fb:false },
+        { name:"S08 — Filter Beds",        short:"Restored",     level:null, adj:"Spatial", color:"#1A6634", water:"#1A6634", opacity:0.40, fb:true  }
+      ];
+
+      var BASELINE=4.8, MIN_LVL=4.6, MAX_LVL=7.5, SCALE=0.18;
+      var current=0, placed=false, panelOpen=true;
+
+      document.querySelector('a-scene').addEventListener('click', function() {
+        if (!placed) {
+          document.querySelector('#anchor').setAttribute('visible', true);
+          document.querySelector('#prompt').style.display = 'none';
+          placed = true;
+        }
+      });
+
+      function togglePanel() {
+        panelOpen = !panelOpen;
+        document.querySelector('#factor-panel').classList.toggle('hidden', !panelOpen);
+        var arrow = document.querySelector('#toggle-arrow');
+        arrow.className = panelOpen ? 'open' : '';
+        arrow.innerHTML = panelOpen ? '&#9664;' : '&#9654;';
+      }
+
+      function updateFactors(i) {
+        var f = FACTORS[i];
+        ['surface','density','sewage','trees'].forEach(function(k) {
+          document.querySelector('#pip-'+k).className = 'factor-pip pip-'+f[k].cls;
+          var v = document.querySelector('#val-'+k);
+          v.className = 'factor-val val-'+f[k].cls;
+          v.textContent = f[k].val;
+        });
+      }
+
+      function prevScenario() { setScenario((current+7)%8); }
+      function nextScenario() { setScenario((current+1)%8); }
+
+      function setScenario(index) {
+        document.querySelector('#sb'+current).classList.remove('active');
+        document.querySelector('#sb'+index).classList.add('active');
+        current = index;
+        var s = SCENARIOS[index];
+
+        document.querySelector('#scenario-label').style.setProperty('--sc', s.color);
+        document.querySelector('#label-title').textContent = s.name;
+        document.querySelector('#label-level').textContent =
+          s.level ? s.level+'m AOD · '+s.adj : s.adj;
+        document.querySelector('#nav-name').textContent    = s.short;
+        document.querySelector('#nav-counter').textContent = (index+1)+' of 8';
+
+        updateFactors(index);
+
+        var water = document.querySelector('#water');
+        var ring  = document.querySelector('#ring');
+        var fzone = document.querySelector('#filterzone');
+        var badge = document.querySelector('#fb-badge');
+
+        if (s.fb) {
+          water.setAttribute('visible', false);
+          ring.setAttribute('visible', false);
+          fzone.setAttribute('visible', true);
+          badge.style.display = 'block';
+          document.querySelector('#scale-marker').style.top = '100%';
+        } else {
+          water.setAttribute('visible', true);
+          ring.setAttribute('visible', true);
+          fzone.setAttribute('visible', false);
+          badge.style.display = 'none';
+          var h = ((s.level-BASELINE)*SCALE).toFixed(3);
+          water.setAttribute('position','0 '+h+' 0');
+          water.setAttribute('color', s.water);
+          water.setAttribute('material','opacity:'+s.opacity+';transparent:true');
+          ring.setAttribute('position','0 '+(parseFloat(h)+0.01).toFixed(3)+' 0');
+          ring.setAttribute('color', s.color);
+          var pct    = (s.level-MIN_LVL)/(MAX_LVL-MIN_LVL);
+          var topPct = ((1-pct)*88+4).toFixed(1);
+          document.querySelector('#scale-marker').style.top = topPct+'%';
+        }
+      }
+    </script>
+  </body>
+</html>
