@@ -79,9 +79,14 @@ const updateFactorPanel = (scenarioId) => {
 // ── PIPELINE MODULE ───────────────────────────────────────────────────────────
 
 const imageTargetPipelineModule = () => {
+  // Required by 8th Wall's GL compositor — without this Three.js objects
+  // are invisible because the colour-space blend doesn't match the camera feed
+  THREE.ColorManagement.enabled = false
+
   const anchors     = {}
   let worldCuboidGroup = null
   let activeScenarioId = null
+  let lastCardPos = null   // set from detail.position on every imagefound/updated
 
   // ── World cuboid ────────────────────────────────────────────────────────────
 
@@ -92,54 +97,46 @@ const imageTargetPipelineModule = () => {
       return
     }
 
-    const {scene, camera} = XR8.Threejs.xrScene()
-    if (!scene || !camera) return
+    const {scene} = XR8.Threejs.xrScene()
+    if (!scene) return
 
     if (worldCuboidGroup) {
       scene.remove(worldCuboidGroup)
       worldCuboidGroup = null
     }
 
-    // Height = flood depth above 4.0 m AOD → room-scale (0.8–3.5 m)
+    // Height = flood depth above 4.0 m reference (room-scale)
     // S01→0.8m | S03→1.2m | S06→3.5m | S07→1.1m
     const height = Math.max(0.1, level - 4.0)
     const group  = new THREE.Group()
 
-    // Water volume — full 3D box anchored to the floor
+    // ── Water body: 5×5 m footprint fills the physical space ───────────────
     const box = new THREE.Mesh(
-      new THREE.BoxGeometry(2.5, height, 2.5),
-      new THREE.MeshBasicMaterial({ color:'#00BFFF', transparent:true, opacity:0.72, side:THREE.DoubleSide })
+      new THREE.BoxGeometry(5, height, 5),
+      new THREE.MeshBasicMaterial({ color:'#00BFFF', transparent:true, opacity:0.65, side:THREE.DoubleSide })
     )
-    box.position.y = height / 2   // base at y=0 (floor), top at y=height
+    box.position.y = height / 2   // base at y=0, top at y=height
     group.add(box)
 
-    // Water surface shimmer on top
+    // Water surface shimmer
     const surface = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.5, 2.5),
-      new THREE.MeshBasicMaterial({ color:'#00DFFF', transparent:true, opacity:0.85, side:THREE.DoubleSide })
+      new THREE.PlaneGeometry(5, 5),
+      new THREE.MeshBasicMaterial({ color:'#00DFFF', transparent:true, opacity:0.75, side:THREE.DoubleSide })
     )
     surface.rotation.x = -Math.PI / 2
     surface.position.y = height
     group.add(surface)
 
-    // Bright waterline strip on the front face
-    const waterline = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.5, 0.05),
-      new THREE.MeshBasicMaterial({ color:0xffffff, side:THREE.DoubleSide })
-    )
-    waterline.position.set(0, height, 1.26)  // front face of the box
-    group.add(waterline)
-
-    // Place 2 m in front of camera at floor level
-    const dir = new THREE.Vector3(0, 0, -1)
-    dir.applyQuaternion(camera.quaternion)
-    dir.y = 0
-    if (dir.lengthSq() < 0.001) dir.set(0, 0, -1)
-    dir.normalize()
-
-    group.position.copy(camera.position)
-    group.position.addScaledVector(dir, 2)
-    group.position.y = 0
+    // ── Anchor to floor using the detected card's world position ────────────
+    // Place cube centre 2 m beyond the card so the camera stays outside
+    if (lastCardPos) {
+      const toCard = new THREE.Vector3(lastCardPos.x, 0, lastCardPos.z)
+      const dist   = toCard.length() || 1
+      toCard.normalize()
+      group.position.set(toCard.x * (dist + 2), 0, toCard.z * (dist + 2))
+    } else {
+      group.position.set(0, 0, -3)
+    }
 
     scene.add(group)
     worldCuboidGroup = group
@@ -208,6 +205,7 @@ const imageTargetPipelineModule = () => {
     anchor.visible = true
 
     activeScenarioId = scenarioId
+    lastCardPos = detail.position   // capture card world pos for cube anchor
     placeWorldCuboid(scenarioId)
     updateFactorPanel(scenarioId)
   }
