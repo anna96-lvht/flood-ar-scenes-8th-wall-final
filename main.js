@@ -79,12 +79,9 @@ const updateFactorPanel = (scenarioId) => {
 // ── PIPELINE MODULE ───────────────────────────────────────────────────────────
 
 const imageTargetPipelineModule = () => {
-  THREE.ColorManagement.enabled = false
-
-  const anchors     = {}   // scenarioId → THREE.Group (holds PNG plane)
+  const anchors     = {}
   let worldCuboidGroup = null
   let activeScenarioId = null
-  let lastCardPos = null   // world position of the last detected card
 
   // ── World cuboid ────────────────────────────────────────────────────────────
 
@@ -100,60 +97,56 @@ const imageTargetPipelineModule = () => {
 
     if (worldCuboidGroup) {
       scene.remove(worldCuboidGroup)
-      worldCuboidGroup.traverse(c => { c.geometry?.dispose(); c.material?.dispose() })
       worldCuboidGroup = null
     }
 
-    // height = raw AOD value so each scenario has a distinct, correct height:
-    // S01 4.8m / S03 5.2m / S06 7.5m / S07 5.1m
+    // height = raw AOD in metres — S01 4.8m / S03 5.2m / S06 7.5m / S07 5.1m
     const height = level
     const group  = new THREE.Group()
 
-    // Water body — 2×2m footprint, box placed 4m away so camera (at 0,0,0)
-    // sees the near face at 3m and is never inside the volume.
+    // Water body — MeshBasicMaterial needs no lights; always renders
     const box = new THREE.Mesh(
-      new THREE.BoxGeometry(2, height, 2),
-      new THREE.MeshStandardMaterial({ color:'#00BFFF', transparent:true, opacity:0.65, metalness:0.15, roughness:0.6 })
+      new THREE.BoxGeometry(3, height, 3),
+      new THREE.MeshBasicMaterial({ color:'#00BFFF', transparent:true, opacity:0.65, side:THREE.DoubleSide })
     )
     box.position.y = height / 2
     group.add(box)
 
-    // Water surface shimmer at the top of the column
+    // Water surface shimmer
     const surface = new THREE.Mesh(
-      new THREE.PlaneGeometry(2, 2),
+      new THREE.PlaneGeometry(3, 3),
       new THREE.MeshBasicMaterial({ color:'#00DFFF', transparent:true, opacity:0.75, side:THREE.DoubleSide })
     )
     surface.rotation.x = -Math.PI / 2
     surface.position.y = height
     group.add(surface)
 
-    // Waterline strip on the back face (group local z = -1)
+    // Waterline strip on back face
     const waterline = new THREE.Mesh(
-      new THREE.PlaneGeometry(2, 0.04),
+      new THREE.PlaneGeometry(3, 0.04),
       new THREE.MeshBasicMaterial({ color:0xffffff, side:THREE.DoubleSide })
     )
-    waterline.position.set(0, height, -1)
+    waterline.position.set(0, height, -1.5)
     group.add(waterline)
 
-    // Faint 1 m reference marks on back face
-    const refMat = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.08, side:THREE.DoubleSide })
+    // Faint 1m reference marks
+    const refMat = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.12, side:THREE.DoubleSide })
     for (let h = 1; h <= height; h += 1) {
-      const mark = new THREE.Mesh(new THREE.PlaneGeometry(2, 0.02), refMat)
-      mark.position.set(0, h, -1)
+      const mark = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.02), refMat)
+      mark.position.set(0, h, -1.5)
       group.add(mark)
     }
 
-    // Direction: from camera (origin) toward the detected card's horizontal pos.
-    // This is always valid regardless of whether camera tilts downward (avoiding
-    // the NaN that dir.y=0 + normalize() produces on a downward-facing camera).
-    const dir = new THREE.Vector3(
-      lastCardPos?.x ?? 0,
-      0,
-      lastCardPos?.z ?? -1
-    )
+    // Camera-quaternion direction (same as reference project) with NaN guard:
+    // if camera tilts straight down, horizontal component → zero → guard kicks in
+    const dir = new THREE.Vector3(0, 0, -1)
+    dir.applyQuaternion(camera.quaternion)
+    dir.y = 0
     if (dir.lengthSq() < 0.001) dir.set(0, 0, -1)
     dir.normalize()
-    group.position.set(dir.x * 4, 0, dir.z * 4)
+    group.position.copy(camera.position)
+    group.position.addScaledVector(dir, 2)
+    group.position.y = 0
 
     scene.add(group)
     worldCuboidGroup = group
@@ -222,7 +215,6 @@ const imageTargetPipelineModule = () => {
     anchor.visible = true
 
     activeScenarioId = scenarioId
-    lastCardPos = detail.position
     placeWorldCuboid(scenarioId)
     updateFactorPanel(scenarioId)
   }
