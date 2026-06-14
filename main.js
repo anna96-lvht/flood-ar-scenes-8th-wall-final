@@ -37,7 +37,6 @@ const FACTOR_DATA = {
 }
 
 const FACTOR_COLORS = { green: '#5dc27f', orange: '#f39c12', red: '#e34d4d' }
-const FLOOR_REF = 4.0
 
 // ── UI ────────────────────────────────────────────────────────────────────────
 
@@ -104,47 +103,50 @@ const imageTargetPipelineModule = () => {
       worldCuboidGroup = null
     }
 
-    const height = Math.max(0.1, level - FLOOR_REF)
+    // height = raw AOD value so each scenario has a distinct, correct height:
+    // S01 4.8m / S03 5.2m / S06 7.5m / S07 5.1m
+    const height = level
     const group  = new THREE.Group()
 
-    // Water body — 3×3m footprint so it fits in camera view without dominating
+    // Water body — 2×2m footprint, box placed 4m away so camera (at 0,0,0)
+    // sees the near face at 3m and is never inside the volume.
     const box = new THREE.Mesh(
-      new THREE.BoxGeometry(3, height, 3),
+      new THREE.BoxGeometry(2, height, 2),
       new THREE.MeshStandardMaterial({ color:'#00BFFF', transparent:true, opacity:0.65, metalness:0.15, roughness:0.6 })
     )
     box.position.y = height / 2
     group.add(box)
 
-    // Water surface
+    // Water surface shimmer at the top of the column
     const surface = new THREE.Mesh(
-      new THREE.PlaneGeometry(3, 3),
+      new THREE.PlaneGeometry(2, 2),
       new THREE.MeshBasicMaterial({ color:'#00DFFF', transparent:true, opacity:0.75, side:THREE.DoubleSide })
     )
     surface.rotation.x = -Math.PI / 2
     surface.position.y = height
     group.add(surface)
 
-    // Waterline strip on back face
+    // Waterline strip on the back face (group local z = -1)
     const waterline = new THREE.Mesh(
-      new THREE.PlaneGeometry(3, 0.04),
+      new THREE.PlaneGeometry(2, 0.04),
       new THREE.MeshBasicMaterial({ color:0xffffff, side:THREE.DoubleSide })
     )
-    waterline.position.set(0, height, -1.5)
+    waterline.position.set(0, height, -1)
     group.add(waterline)
 
-    // Faint reference marks every 0.5 m
+    // Faint 1 m reference marks on back face
     const refMat = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.08, side:THREE.DoubleSide })
-    for (let h = 0.5; h <= height; h += 0.5) {
-      const mark = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.02), refMat)
-      mark.position.set(0, h, -1.5)
+    for (let h = 1; h <= height; h += 1) {
+      const mark = new THREE.Mesh(new THREE.PlaneGeometry(2, 0.02), refMat)
+      mark.position.set(0, h, -1)
       group.add(mark)
     }
 
-    // Place 1.5 m in front of camera at floor level
+    // Place group centre 4m in front → near face at 3m, camera clearly outside
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)
     dir.y = 0
     dir.normalize()
-    group.position.copy(camera.position).addScaledVector(dir, 1.5)
+    group.position.copy(camera.position).addScaledVector(dir, 4)
     group.position.y = 0
 
     scene.add(group)
