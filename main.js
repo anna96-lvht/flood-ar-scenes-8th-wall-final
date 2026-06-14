@@ -84,6 +84,7 @@ const imageTargetPipelineModule = () => {
   const anchors     = {}   // scenarioId → THREE.Group (holds PNG plane)
   let worldCuboidGroup = null
   let activeScenarioId = null
+  let lastCardPos = null   // world position of the last detected card
 
   // ── World cuboid ────────────────────────────────────────────────────────────
 
@@ -142,12 +143,17 @@ const imageTargetPipelineModule = () => {
       group.add(mark)
     }
 
-    // Place group centre 4m in front → near face at 3m, camera clearly outside
-    const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)
-    dir.y = 0
+    // Direction: from camera (origin) toward the detected card's horizontal pos.
+    // This is always valid regardless of whether camera tilts downward (avoiding
+    // the NaN that dir.y=0 + normalize() produces on a downward-facing camera).
+    const dir = new THREE.Vector3(
+      lastCardPos?.x ?? 0,
+      0,
+      lastCardPos?.z ?? -1
+    )
+    if (dir.lengthSq() < 0.001) dir.set(0, 0, -1)
     dir.normalize()
-    group.position.copy(camera.position).addScaledVector(dir, 4)
-    group.position.y = 0
+    group.position.set(dir.x * 4, 0, dir.z * 4)
 
     scene.add(group)
     worldCuboidGroup = group
@@ -216,6 +222,7 @@ const imageTargetPipelineModule = () => {
     anchor.visible = true
 
     activeScenarioId = scenarioId
+    lastCardPos = detail.position
     placeWorldCuboid(scenarioId)
     updateFactorPanel(scenarioId)
   }
