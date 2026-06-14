@@ -107,44 +107,44 @@ const imageTargetPipelineModule = () => {
     const height = Math.max(0.1, level - FLOOR_REF)
     const group  = new THREE.Group()
 
-    // Water body
+    // Water body — 3×3m footprint so it fits in camera view without dominating
     const box = new THREE.Mesh(
-      new THREE.BoxGeometry(10, height, 10),
-      new THREE.MeshStandardMaterial({ color:'#00BFFF', transparent:true, opacity:0.72, metalness:0.15, roughness:0.6 })
+      new THREE.BoxGeometry(3, height, 3),
+      new THREE.MeshStandardMaterial({ color:'#00BFFF', transparent:true, opacity:0.65, metalness:0.15, roughness:0.6 })
     )
     box.position.y = height / 2
     group.add(box)
 
     // Water surface
     const surface = new THREE.Mesh(
-      new THREE.PlaneGeometry(10, 10),
+      new THREE.PlaneGeometry(3, 3),
       new THREE.MeshBasicMaterial({ color:'#00DFFF', transparent:true, opacity:0.75, side:THREE.DoubleSide })
     )
     surface.rotation.x = -Math.PI / 2
     surface.position.y = height
     group.add(surface)
 
-    // Waterline strip on back wall
+    // Waterline strip on back face
     const waterline = new THREE.Mesh(
-      new THREE.PlaneGeometry(10, 0.04),
+      new THREE.PlaneGeometry(3, 0.04),
       new THREE.MeshBasicMaterial({ color:0xffffff, side:THREE.DoubleSide })
     )
-    waterline.position.set(0, height, -5)
+    waterline.position.set(0, height, -1.5)
     group.add(waterline)
 
-    // Faint reference marks every 0.5 units
+    // Faint reference marks every 0.5 m
     const refMat = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.08, side:THREE.DoubleSide })
     for (let h = 0.5; h <= height; h += 0.5) {
-      const mark = new THREE.Mesh(new THREE.PlaneGeometry(10, 0.02), refMat)
-      mark.position.set(0, h, -5)
+      const mark = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.02), refMat)
+      mark.position.set(0, h, -1.5)
       group.add(mark)
     }
 
-    // Place 2 m in front of camera at floor level
+    // Place 1.5 m in front of camera at floor level
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)
     dir.y = 0
     dir.normalize()
-    group.position.copy(camera.position).addScaledVector(dir, 2)
+    group.position.copy(camera.position).addScaledVector(dir, 1.5)
     group.position.y = 0
 
     scene.add(group)
