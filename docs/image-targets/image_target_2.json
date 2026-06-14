@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/image_target_2_luminance.jpg",
+  "metadata": null,
+  "name": "image_target_2",
+  "type": "PLANAR",
+  "properties": {
+    "top": 60,
+    "left": 0,
+    "width": 2211,
+    "height": 2948,
+    "isRotated": false,
+    "originalWidth": 2211,
+    "originalHeight": 3067
+  },
+  "resources": {
+    "originalImage": "image_target_2_original.jpg",
+    "croppedImage": "image_target_2_cropped.jpg",
+    "thumbnailImage": "image_target_2_thumbnail.jpg",
+    "luminanceImage": "image_target_2_luminance.jpg"
+  },
+  "created": 1781433661317,
+  "updated": 1781433661317
+}

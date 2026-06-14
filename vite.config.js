@@ -6,7 +6,7 @@ export default defineConfig({
   base: './',         // relative paths — works at any subdirectory (GitHub Pages)
   publicDir: 'public',
   build: {
-    outDir: 'dist',
+    outDir: 'docs',   // GitHub Pages reads from /docs on main branch
   },
   server: {
     fs: {

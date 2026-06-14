@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>The Art of Resilience — Flood AR</title>
+
+    <!-- XRExtras: loading screen, full-window canvas, runtime error UI -->
+    <script src="//cdn.8thwall.com/web/xrextras/xrextras.js"></script>
+
+    <!-- 8th Wall engine — data-preload-chunks="slam" loads world tracking inline -->
+    <script data-preload-chunks="slam" src="./8thwall/xr.js"></script>
+    <script type="module" crossorigin src="./assets/index-DjCj-YSt.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Cg8nDWyp.css">
+  </head>
+  <body>
+
+    <canvas id="camerafeed"></canvas>
+    <div id="infoBar" class="info-bar">Point camera at a scenario card</div>
+    <div id="detailPanel" class="detail-panel" hidden></div>
+
+
+  </body>
+</html>
