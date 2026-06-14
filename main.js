@@ -110,30 +110,46 @@ const imageTargetPipelineModule = () => {
     const height = Math.max(0.1, level - 4.0)
     const group  = new THREE.Group()
 
-    // ── Water body: 5×5 m footprint fills the physical space ───────────────
+    // ── Virtual wall backdrop ───────────────────────────────────────────────
+    const wall = new THREE.Mesh(
+      new THREE.PlaneGeometry(6, 5),
+      new THREE.MeshBasicMaterial({ color:0x555555, transparent:true, opacity:0.25, side:THREE.FrontSide })
+    )
+    wall.position.set(0, 2.5, -0.76)   // just behind the water body
+    group.add(wall)
+
+    // ── Water body: 5 m wide × 1.5 m deep, back face flush with wall ───────
     const box = new THREE.Mesh(
-      new THREE.BoxGeometry(5, height, 5),
+      new THREE.BoxGeometry(5, height, 1.5),
       new THREE.MeshBasicMaterial({ color:'#00BFFF', transparent:true, opacity:0.65, side:THREE.DoubleSide })
     )
     box.position.y = height / 2   // base at y=0, top at y=height
     group.add(box)
 
-    // Water surface shimmer
+    // Water surface shimmer on top
     const surface = new THREE.Mesh(
-      new THREE.PlaneGeometry(5, 5),
+      new THREE.PlaneGeometry(5, 1.5),
       new THREE.MeshBasicMaterial({ color:'#00DFFF', transparent:true, opacity:0.75, side:THREE.DoubleSide })
     )
     surface.rotation.x = -Math.PI / 2
     surface.position.y = height
     group.add(surface)
 
-    // ── Anchor to floor using the detected card's world position ────────────
-    // Place cube centre 2 m beyond the card so the camera stays outside
+    // Bright waterline on the front face
+    const waterline = new THREE.Mesh(
+      new THREE.PlaneGeometry(5, 0.05),
+      new THREE.MeshBasicMaterial({ color:0xffffff, side:THREE.DoubleSide })
+    )
+    waterline.position.set(0, height, 0.76)
+    group.add(waterline)
+
+    // ── Anchor: card position + 2 m so camera stays outside the volume ──────
     if (lastCardPos) {
       const toCard = new THREE.Vector3(lastCardPos.x, 0, lastCardPos.z)
       const dist   = toCard.length() || 1
       toCard.normalize()
       group.position.set(toCard.x * (dist + 2), 0, toCard.z * (dist + 2))
+      group.rotation.y = Math.atan2(-toCard.x, -toCard.z)  // face toward camera
     } else {
       group.position.set(0, 0, -3)
     }
