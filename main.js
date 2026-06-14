@@ -100,53 +100,68 @@ const imageTargetPipelineModule = () => {
       worldCuboidGroup = null
     }
 
-    // height = raw AOD in metres — S01 4.8m / S03 5.2m / S06 7.5m / S07 5.1m
-    const height = level
+    // Display height = flood depth above 4.0 m AOD reference.
+    // This keeps the box room-scale (0.8–3.5 m) so the camera at floor level
+    // can see the full volume without being inside it.
+    // S01→0.8m | S03→1.2m | S06→3.5m | S07→1.1m
+    const height = Math.max(0.1, level - 4.0)
     const group  = new THREE.Group()
 
-    // Water body — MeshBasicMaterial needs no lights; always renders
-    const box = new THREE.Mesh(
-      new THREE.BoxGeometry(3, height, 3),
-      new THREE.MeshBasicMaterial({ color:'#00BFFF', transparent:true, opacity:0.65, side:THREE.DoubleSide })
+    // ── Virtual wall backdrop ───────────────────────────────────────────────
+    // Grey plane behind the water slab gives "anchored to a wall" context
+    const wall = new THREE.Mesh(
+      new THREE.PlaneGeometry(3, 5),
+      new THREE.MeshBasicMaterial({ color:0x666666, transparent:true, opacity:0.25, side:THREE.FrontSide })
     )
-    box.position.y = height / 2
+    wall.position.set(0, 2.5, -0.22)   // slightly behind water body
+    group.add(wall)
+
+    // ── Water body — wide, shallow slab pressed against the wall ───────────
+    const box = new THREE.Mesh(
+      new THREE.BoxGeometry(2.5, height, 0.35),
+      new THREE.MeshBasicMaterial({ color:'#00BFFF', transparent:true, opacity:0.72, side:THREE.DoubleSide })
+    )
+    box.position.y = height / 2        // base at y=0, top at y=height
     group.add(box)
 
-    // Water surface shimmer
+    // ── Water surface shimmer (top face) ───────────────────────────────────
     const surface = new THREE.Mesh(
-      new THREE.PlaneGeometry(3, 3),
-      new THREE.MeshBasicMaterial({ color:'#00DFFF', transparent:true, opacity:0.75, side:THREE.DoubleSide })
+      new THREE.PlaneGeometry(2.5, 0.35),
+      new THREE.MeshBasicMaterial({ color:'#00DFFF', transparent:true, opacity:0.9, side:THREE.DoubleSide })
     )
     surface.rotation.x = -Math.PI / 2
     surface.position.y = height
     group.add(surface)
 
-    // Waterline strip on back face
+    // ── Bright waterline at flood level ────────────────────────────────────
     const waterline = new THREE.Mesh(
-      new THREE.PlaneGeometry(3, 0.04),
+      new THREE.PlaneGeometry(2.5, 0.05),
       new THREE.MeshBasicMaterial({ color:0xffffff, side:THREE.DoubleSide })
     )
-    waterline.position.set(0, height, -1.5)
+    waterline.position.set(0, height, 0.18)  // face of the slab
     group.add(waterline)
 
-    // Faint 1m reference marks
-    const refMat = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.12, side:THREE.DoubleSide })
-    for (let h = 1; h <= height; h += 1) {
-      const mark = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.02), refMat)
-      mark.position.set(0, h, -1.5)
-      group.add(mark)
+    // ── 0.5 m tick marks on wall ───────────────────────────────────────────
+    const tickMat = new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.18, side:THREE.DoubleSide })
+    for (let h = 0.5; h <= 4; h += 0.5) {
+      const tick = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 0.018), tickMat)
+      tick.position.set(0, h, -0.21)
+      group.add(tick)
     }
 
-    // Camera-quaternion direction (same as reference project) with NaN guard:
-    // if camera tilts straight down, horizontal component → zero → guard kicks in
+    // ── Placement: 2 m in front of camera, facing camera ──────────────────
     const dir = new THREE.Vector3(0, 0, -1)
     dir.applyQuaternion(camera.quaternion)
     dir.y = 0
     if (dir.lengthSq() < 0.001) dir.set(0, 0, -1)
     dir.normalize()
+
     group.position.copy(camera.position)
     group.position.addScaledVector(dir, 2)
     group.position.y = 0
+
+    // Rotate so the wall face always faces the camera
+    group.rotation.y = Math.atan2(-dir.x, -dir.z)
 
     scene.add(group)
     worldCuboidGroup = group
