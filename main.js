@@ -111,33 +111,39 @@ const imageTargetPipelineModule = () => {
     const group  = new THREE.Group()
 
     // ── Water body ──────────────────────────────────────────────────────────
-    // 5×5m keeps walls ~2.5m from camera — inside 8th Wall's ~3.5m far clip.
-    // 10×10m puts walls at 5m = all clipped, nothing renders.
+    // 5×5m: walls sit ~2.5m from the camera when camera is inside —
+    // safely within 8th Wall's ~3.5m far-clip plane.
     const box = new THREE.Mesh(
       new THREE.BoxGeometry(5, height, 5),
-      new THREE.MeshBasicMaterial({ color: '#00BFFF', transparent: true, opacity: 0.5, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ color: '#00BFFF', transparent: true, opacity: 0.65, side: THREE.DoubleSide })
     )
-    box.position.y = height / 2   // bottom at group origin, top at height
+    box.position.y = height / 2   // bottom at y=0, top at y=height
     group.add(box)
 
     // Water surface on top
     const surface = new THREE.Mesh(
       new THREE.PlaneGeometry(5, 5),
-      new THREE.MeshBasicMaterial({ color: '#40E0FF', transparent: true, opacity: 0.85, side: THREE.DoubleSide })
+      new THREE.MeshBasicMaterial({ color: '#40E0FF', transparent: true, opacity: 0.9, side: THREE.DoubleSide })
     )
     surface.rotation.x = -Math.PI / 2
     surface.position.y = height
     group.add(surface)
 
-    // ── Anchor: card XZ, card Y = real floor level ──────────────────────────
-    // Camera is at y=0 in 8th Wall's frame. Card (on a table/floor) is below
-    // camera so lastCardPos.y is negative. Using it as the group Y puts the
-    // box floor at the real surface — camera inside for tall scenarios (S06),
-    // looking down for shallow ones (S01/S03).
+    // ── Placement ────────────────────────────────────────────────────────────
+    // Camera sits at y=0. Group y=0 puts the box floor at camera height so
+    // the camera is at the base of the volume looking into it.
+    // XZ: project 2 m beyond the card so the box centre is reachable but the
+    // near face stays close to camera. This is the same logic from the commit
+    // that first rendered the box (even if it was "all blue").
     if (lastCardPos) {
-      group.position.set(lastCardPos.x, lastCardPos.y, lastCardPos.z)
+      const toCard = new THREE.Vector3(lastCardPos.x, 0, lastCardPos.z)
+      const dist   = toCard.length() || 1
+      toCard.normalize()
+      group.position.set(toCard.x * (dist + 2), 0, toCard.z * (dist + 2))
+      console.log('[flood-ar] box placed — dist:', dist.toFixed(2), 'height:', height.toFixed(2), 'pos:', group.position)
     } else {
-      group.position.set(0, -0.5, -2)
+      group.position.set(0, 0, -2)
+      console.log('[flood-ar] box placed at fallback (0,0,-2) — height:', height.toFixed(2))
     }
 
     scene.add(group)
