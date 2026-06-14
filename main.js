@@ -142,11 +142,11 @@ const imageTargetPipelineModule = () => {
       group.add(mark)
     }
 
-    // Place group centre 6m in front → near face at 5m, camera clearly outside
+    // Place group centre 4m in front → near face at 3m, camera clearly outside
     const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion)
     dir.y = 0
     dir.normalize()
-    group.position.copy(camera.position).addScaledVector(dir, 6)
+    group.position.copy(camera.position).addScaledVector(dir, 4)
     group.position.y = 0
 
     scene.add(group)
