@@ -1,0 +1,23 @@
+{
+  "imagePath": "image-targets/3D_Model_Print_luminance.jpg",
+  "metadata": null,
+  "name": "3D_Model_Print",
+  "type": "PLANAR",
+  "properties": {
+    "top": 221,
+    "left": 0,
+    "width": 3555,
+    "height": 4740,
+    "isRotated": false,
+    "originalWidth": 3555,
+    "originalHeight": 5182
+  },
+  "resources": {
+    "originalImage": "3D_Model_Print_original.jpg",
+    "croppedImage": "3D_Model_Print_cropped.jpg",
+    "thumbnailImage": "3D_Model_Print_thumbnail.jpg",
+    "luminanceImage": "3D_Model_Print_luminance.jpg"
+  },
+  "created": 1781456753987,
+  "updated": 1781456753987
+}
