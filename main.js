@@ -138,22 +138,16 @@ const imageTargetPipelineModule = () => {
     group.add(surface)
 
     // ── Placement ────────────────────────────────────────────────────────────
-    // Camera sits at y=0. Group y=0 puts the box floor at camera height so
-    // the camera is at the base of the volume looking into it.
-    // XZ: project 2 m beyond the card so the box centre is reachable but the
-    // near face stays close to camera. This is the same logic from the commit
-    // that first rendered the box (even if it was "all blue").
-    if (lastCardPos) {
-      const toCard = new THREE.Vector3(lastCardPos.x, 0, lastCardPos.z)
-      const dist   = toCard.length() || 1
-      toCard.normalize()
-      group.position.set(toCard.x * (dist + 2), 0, toCard.z * (dist + 2))
-      console.log('[flood-ar] box placed — dist:', dist.toFixed(2), 'height:', height.toFixed(2), 'pos:', group.position)
-      console.log('[flood-ar] near face dist:', ((dist + 2) - 2.5).toFixed(2), 'far face dist:', ((dist + 2) + 2.5).toFixed(2))
-    } else {
-      group.position.set(0, 0, -2)
-      console.log('[flood-ar] box placed at fallback (0,0,-2) — height:', height.toFixed(2))
-    }
+    // Place the box centred on the card's XZ position at y=0 (camera floor).
+    // Camera is at (0,0,0); card is always in front so camera sits inside the
+    // 5×5 m volume — walls land ~2.5 m away, within the ~3.5 m far-clip plane.
+    // The old "dist+2" direction projection was fragile: when the card appeared
+    // near-centre (x≈0, z≈0) the direction vector normalised to NaN and the
+    // box was placed at (NaN, 0, NaN) — invisible.
+    const px = lastCardPos ? lastCardPos.x : 0
+    const pz = lastCardPos ? lastCardPos.z : -2
+    group.position.set(px, 0, pz)
+    console.log('[flood-ar] box at (', px.toFixed(2), ', 0,', pz.toFixed(2), ') height:', height.toFixed(2))
 
     scene.add(group)
     worldCuboidGroup = group
