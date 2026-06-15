@@ -7,11 +7,11 @@ window.THREE = { ...THREE }
 // ── DATA ─────────────────────────────────────────────────────────────────────
 
 const SCENARIO_CONFIG = {
-  flood_current:      { target: 'image-target-1', texture: 'flood_current.png',      name: 'S01 — Present Day (4.8m AOD)',  color: '#1A2E4A', aod: 4.8  },
-  flood_2050_high:    { target: 'image_target_2',  texture: 'flood_2050_high.png',    name: 'S03 — 2050 High (5.2m AOD)',    color: '#4D4FA1', aod: 5.2  },
-  flood_2100_extreme: { target: 'image_target_3',  texture: 'flood_2100_extreme.png', name: 'S06 — 2100 Extreme (7.5m AOD)', color: '#7E1416', aod: 7.5  },
-  flood_development:  { target: 'image_target_4',  texture: 'flood_development.png',  name: 'S07 — Development (5.1m AOD)',  color: '#934220', aod: 5.1  },
-  zone_filterbeds:    { target: 'image_target_5',  texture: 'zone_filterbeds.png',    name: 'S08 — Filter Beds Restored',    color: '#1A6634', aod: null },
+  flood_current:      { target: 'image-target-1', name: 'S01 — Present Day (4.8m AOD)',  color: '#1A2E4A', aod: 4.8  },
+  flood_2050_high:    { target: 'image_target_2',  name: 'S03 — 2050 High (5.2m AOD)',    color: '#4D4FA1', aod: 5.2  },
+  flood_2100_extreme: { target: 'image_target_3',  name: 'S06 — 2100 Extreme (7.5m AOD)', color: '#7E1416', aod: 7.5  },
+  flood_development:  { target: 'image_target_4',  name: 'S07 — Development (5.1m AOD)',  color: '#934220', aod: 5.1  },
+  zone_filterbeds:    { target: 'image_target_5',  name: 'S08 — Filter Beds Restored',    color: '#1A6634', aod: null },
 }
 
 // Maps the image target name (from JSON "name" field) → scenarioId
@@ -76,6 +76,84 @@ const updateFactorPanel = (scenarioId) => {
   }
 }
 
+// ── CARD CUBOID ───────────────────────────────────────────────────────────────
+// Builds the water volume + student-height markers as children of an anchor
+// group. The anchor group is positioned/rotated by showTarget each frame, so
+// everything attached to it moves with the card automatically.
+
+function createCardCuboid(scenarioId, anchor) {
+  const level = SCENARIO_AOD[scenarioId]
+  if (level === null || level === undefined) return
+
+  // height = flood depth above 4.0 m reference, in card-scale units
+  // S01→0.8  S03→1.2  S06→3.5  S07→1.1
+  const height = Math.max(0.1, level - 4.0)
+
+  // Water cuboid — light blue, grows upward from card surface
+  const boxGeom = new THREE.BoxGeometry(0.5, height, 0.5)
+  const box = new THREE.Mesh(
+    boxGeom,
+    new THREE.MeshBasicMaterial({ color: '#7EC8E3', transparent: true, opacity: 0.55, side: THREE.DoubleSide })
+  )
+  box.position.y = height / 2
+  anchor.add(box)
+
+  // White wireframe so the box reads as 3D even when transparent
+  const wire = new THREE.LineSegments(
+    new THREE.EdgesGeometry(boxGeom),
+    new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.6 })
+  )
+  wire.position.copy(box.position)
+  anchor.add(wire)
+
+  // Water surface shimmer on top
+  const surface = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.5, 0.5),
+    new THREE.MeshBasicMaterial({ color: '#B8E8F5', transparent: true, opacity: 0.7, side: THREE.DoubleSide })
+  )
+  surface.rotation.x = -Math.PI / 2
+  surface.position.y = height
+  anchor.add(surface)
+
+  // Student height comparison markers
+  // Red line + "SUBMERGED" label if the flood exceeds that height; green + "SAFE" otherwise
+  const markers = [
+    { h: 1.56, label: '13yr 156cm' },
+    { h: 1.65, label: 'Avg KS3/4 165cm' },
+    { h: 1.73, label: '16yr 173cm' },
+  ]
+
+  markers.forEach((m) => {
+    const colour = height >= m.h ? '#e34d4d' : '#2ECC71'
+
+    // Horizontal line across the card
+    const line = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.6, 0.005),
+      new THREE.MeshBasicMaterial({ color: colour, side: THREE.DoubleSide })
+    )
+    line.position.set(0, m.h, 0)
+    anchor.add(line)
+
+    // Canvas-drawn text sprite beside the line
+    const canvas = document.createElement('canvas')
+    canvas.width  = 512
+    canvas.height = 128
+    const ctx = canvas.getContext('2d')
+    ctx.fillStyle = colour
+    ctx.font = 'bold 36px Arial'
+    ctx.textAlign = 'left'
+    ctx.fillText(m.label, 8, 50)
+    ctx.fillStyle = height >= m.h ? '#e34d4d' : '#2ECC71'
+    ctx.font = 'bold 32px Arial'
+    ctx.fillText(height >= m.h ? 'SUBMERGED' : 'SAFE', 8, 95)
+
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), transparent: true }))
+    sprite.position.set(0.45, m.h, 0)
+    sprite.scale.set(0.5, 0.12, 1)
+    anchor.add(sprite)
+  })
+}
+
 // ── PIPELINE MODULE ───────────────────────────────────────────────────────────
 
 const imageTargetPipelineModule = () => {
@@ -83,88 +161,25 @@ const imageTargetPipelineModule = () => {
   // are invisible because the colour-space blend doesn't match the camera feed
   THREE.ColorManagement.enabled = false
 
-  let worldCuboidGroup = null
-  let activeScenarioId = null
-  let lastCardPos = null   // set from detail.position on every imagefound/updated
-
-  // ── World cuboid ────────────────────────────────────────────────────────────
-
-  const placeWorldCuboid = (scenarioId) => {
-    const level = SCENARIO_AOD[scenarioId]
-    if (level === null || level === undefined) {
-      if (worldCuboidGroup) worldCuboidGroup.visible = false
-      return
-    }
-
-    const {scene} = XR8.Threejs.xrScene()
-    if (!scene) return
-
-    if (worldCuboidGroup) {
-      scene.remove(worldCuboidGroup)
-      worldCuboidGroup = null
-    }
-
-    // Height = flood rise above 4.8 m AOD baseline, 1:1 Three.js units
-    // S01 (4.8)→0.05  |  S03 (5.2)→0.4  |  S06 (7.5)→2.7  |  S07 (5.1)→0.3
-    const height = Math.max(0.05, level - 4.8)
-    const group  = new THREE.Group()
-
-    // ── Water body ──────────────────────────────────────────────────────────
-    // 5×5m: walls sit ~2.5m from the camera when camera is inside —
-    // safely within 8th Wall's ~3.5m far-clip plane.
-    const box = new THREE.Mesh(
-      new THREE.BoxGeometry(5, height, 5),
-      new THREE.MeshBasicMaterial({ color: '#00BFFF', transparent: true, opacity: 0.65, side: THREE.DoubleSide })
-    )
-    box.position.y = height / 2   // bottom at y=0, top at y=height
-    group.add(box)
-
-    // Wireframe edges so the box reads as 3D even with transparent fill
-    const edges = new THREE.EdgesGeometry(box.geometry)
-    const wireframe = new THREE.LineSegments(
-      edges,
-      new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8 })
-    )
-    wireframe.position.copy(box.position)
-    group.add(wireframe)
-
-    // Water surface on top
-    const surface = new THREE.Mesh(
-      new THREE.PlaneGeometry(5, 5),
-      new THREE.MeshBasicMaterial({ color: '#40E0FF', transparent: true, opacity: 0.9, side: THREE.DoubleSide })
-    )
-    surface.rotation.x = -Math.PI / 2
-    surface.position.y = height
-    group.add(surface)
-
-    // ── Placement ────────────────────────────────────────────────────────────
-    // Place the box centred on the card's XZ position at y=0 (camera floor).
-    // Camera is at (0,0,0); card is always in front so camera sits inside the
-    // 5×5 m volume — walls land ~2.5 m away, within the ~3.5 m far-clip plane.
-    // The old "dist+2" direction projection was fragile: when the card appeared
-    // near-centre (x≈0, z≈0) the direction vector normalised to NaN and the
-    // box was placed at (NaN, 0, NaN) — invisible.
-    const px = lastCardPos ? lastCardPos.x : 0
-    const pz = lastCardPos ? lastCardPos.z : -2
-    group.position.set(px, 0, pz)
-    console.log('[flood-ar] box at (', px.toFixed(2), ', 0,', pz.toFixed(2), ') height:', height.toFixed(2))
-
-    scene.add(group)
-    worldCuboidGroup = group
-  }
+  const anchors        = {}
+  let   activeScenarioId = null
 
   // ── Scene init ──────────────────────────────────────────────────────────────
 
   const onStart = async ({canvas}) => {
-    const {camera} = XR8.Threejs.xrScene()
+    const {scene, camera} = XR8.Threejs.xrScene()
 
-    XR8.XrController.updateCameraProjectionMatrix({ origin:camera.position, facing:camera.quaternion })
+    XR8.XrController.updateCameraProjectionMatrix({ origin: camera.position, facing: camera.quaternion })
 
-    // Tap info bar to toggle cuboid
-    document.getElementById('infoBar')?.addEventListener('click', () => {
-      if (!activeScenarioId) return
-      if (worldCuboidGroup?.visible) { worldCuboidGroup.visible = false }
-      else { placeWorldCuboid(activeScenarioId) }
+    // Pre-build one anchor group per scenario. createCardCuboid attaches the
+    // water volume and height markers as children of that group. showTarget
+    // then moves/rotates the group to match the detected card each frame.
+    Object.entries(SCENARIO_CONFIG).forEach(([scenarioId]) => {
+      const anchor = new THREE.Group()
+      anchor.visible = false
+      scene.add(anchor)
+      anchors[scenarioId] = anchor
+      createCardCuboid(scenarioId, anchor)
     })
   }
 
@@ -178,10 +193,25 @@ const imageTargetPipelineModule = () => {
     const scenarioId = TARGET_TO_SCENARIO[detail.name]
     if (!scenarioId) { console.warn('Unknown target:', detail.name); return }
 
+    const anchor = anchors[scenarioId]
+    if (!anchor) return
+
+    // Move the anchor to the card's world position and orientation each frame
+    anchor.position.copy(detail.position)
+    anchor.position.y += 0.05          // small lift so cuboid sits above card face
+    anchor.quaternion.copy(detail.rotation)
+    anchor.scale.set(detail.scale, detail.scale, detail.scale)
+    anchor.visible = true
+
     activeScenarioId = scenarioId
-    lastCardPos = detail.position
-    placeWorldCuboid(scenarioId)
     updateFactorPanel(scenarioId)
+  }
+
+  const hideTarget = ({detail}) => {
+    const scenarioId = TARGET_TO_SCENARIO[detail.name]
+    if (!scenarioId) return
+    const anchor = anchors[scenarioId]
+    if (anchor) anchor.visible = false
   }
 
   return {
@@ -190,6 +220,7 @@ const imageTargetPipelineModule = () => {
     listeners: [
       {event: 'reality.imagefound',   process: showTarget},
       {event: 'reality.imageupdated', process: showTarget},
+      {event: 'reality.imagelost',    process: hideTarget},
     ],
   }
 }
