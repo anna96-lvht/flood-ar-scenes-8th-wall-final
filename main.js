@@ -83,7 +83,6 @@ const imageTargetPipelineModule = () => {
   // are invisible because the colour-space blend doesn't match the camera feed
   THREE.ColorManagement.enabled = false
 
-  const anchors     = {}
   let worldCuboidGroup = null
   let activeScenarioId = null
   let lastCardPos = null   // set from detail.position on every imagefound/updated
@@ -120,6 +119,15 @@ const imageTargetPipelineModule = () => {
     box.position.y = height / 2   // bottom at y=0, top at y=height
     group.add(box)
 
+    // Wireframe edges so the box reads as 3D even with transparent fill
+    const edges = new THREE.EdgesGeometry(box.geometry)
+    const wireframe = new THREE.LineSegments(
+      edges,
+      new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.8 })
+    )
+    wireframe.position.copy(box.position)
+    group.add(wireframe)
+
     // Water surface on top
     const surface = new THREE.Mesh(
       new THREE.PlaneGeometry(5, 5),
@@ -141,6 +149,7 @@ const imageTargetPipelineModule = () => {
       toCard.normalize()
       group.position.set(toCard.x * (dist + 2), 0, toCard.z * (dist + 2))
       console.log('[flood-ar] box placed — dist:', dist.toFixed(2), 'height:', height.toFixed(2), 'pos:', group.position)
+      console.log('[flood-ar] near face dist:', ((dist + 2) - 2.5).toFixed(2), 'far face dist:', ((dist + 2) + 2.5).toFixed(2))
     } else {
       group.position.set(0, 0, -2)
       console.log('[flood-ar] box placed at fallback (0,0,-2) — height:', height.toFixed(2))
@@ -153,33 +162,7 @@ const imageTargetPipelineModule = () => {
   // ── Scene init ──────────────────────────────────────────────────────────────
 
   const onStart = async ({canvas}) => {
-    const {scene, camera, renderer} = XR8.Threejs.xrScene()
-
-    scene.add(new THREE.AmbientLight(0x404040, 5))
-    const sun = new THREE.DirectionalLight(0xffffff, 1)
-    sun.position.set(2, 1, 1)
-    scene.add(sun)
-
-    // Upright PNG plane for each scenario card (image targets 1–5)
-    Object.entries(SCENARIO_CONFIG).forEach(([scenarioId, config]) => {
-      const texture = new THREE.TextureLoader().load(`./textures/${config.texture}`)
-      const plane   = new THREE.Mesh(
-        new THREE.PlaneGeometry(1, 1),
-        new THREE.MeshBasicMaterial({ map:texture, transparent:true, opacity:0.85, side:THREE.DoubleSide })
-      )
-      // rotation.x = -π/2 lays the plane flat on the card surface.
-      // In 8th Wall's image target frame, local +Y is the card normal (toward camera);
-      // the default PlaneGeometry (XY, normal = +Z) would stand vertical on the card.
-      plane.rotation.x   = -Math.PI / 2
-      plane.position.y   = 0.01   // tiny lift above card surface in the normal (+Y) direction
-      plane.userData.sid = scenarioId
-
-      const anchor = new THREE.Group()
-      anchor.visible = false
-      anchor.add(plane)
-      scene.add(anchor)
-      anchors[scenarioId] = anchor
-    })
+    const {camera} = XR8.Threejs.xrScene()
 
     XR8.XrController.updateCameraProjectionMatrix({ origin:camera.position, facing:camera.quaternion })
 
@@ -196,33 +179,15 @@ const imageTargetPipelineModule = () => {
   const showTarget = ({detail}) => {
     console.log('imagefound:', detail.name)
 
-    // Terrain backdrop marker — just track, no content
     if (detail.name === '3D_Model_Print' || detail.name === 'image_target_6') return
 
     const scenarioId = TARGET_TO_SCENARIO[detail.name]
     if (!scenarioId) { console.warn('Unknown target:', detail.name); return }
 
-    const anchor = anchors[scenarioId]
-    if (!anchor) return
-
-    anchor.position.copy(detail.position)
-    anchor.position.y += 0.05
-    if (detail.quaternion) anchor.quaternion.copy(detail.quaternion)
-    else if (detail.rotation) anchor.rotation.copy(detail.rotation)
-    anchor.scale.setScalar(detail.scale)
-    anchor.visible = true
-
     activeScenarioId = scenarioId
-    lastCardPos = detail.position   // capture card world pos for cube anchor
+    lastCardPos = detail.position
     placeWorldCuboid(scenarioId)
     updateFactorPanel(scenarioId)
-  }
-
-  const hideTarget = ({detail}) => {
-    const scenarioId = TARGET_TO_SCENARIO[detail.name]
-    if (!scenarioId) return
-    const anchor = anchors[scenarioId]
-    if (anchor) anchor.visible = false
   }
 
   return {
@@ -231,7 +196,6 @@ const imageTargetPipelineModule = () => {
     listeners: [
       {event: 'reality.imagefound',   process: showTarget},
       {event: 'reality.imageupdated', process: showTarget},
-      {event: 'reality.imagelost',    process: hideTarget},
     ],
   }
 }
