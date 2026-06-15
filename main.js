@@ -196,15 +196,27 @@ const imageTargetPipelineModule = () => {
     const anchor = anchors[scenarioId]
     if (!anchor) return
 
-    // Move the anchor to the card's world position and orientation each frame
+    // Track card position but NOT rotation. Keeping the anchor at identity
+    // quaternion means the cuboid always grows in world +Y (straight up),
+    // so it stands perpendicular to a flat card and the student height
+    // markers correspond to real heights regardless of how the card is tilted.
     anchor.position.copy(detail.position)
-    anchor.position.y += 0.05          // small lift so cuboid sits above card face
-    anchor.quaternion.copy(detail.rotation)
+    anchor.position.y += 0.05          // small lift so cuboid base sits above card face
     anchor.scale.set(detail.scale, detail.scale, detail.scale)
     anchor.visible = true
 
     activeScenarioId = scenarioId
     updateFactorPanel(scenarioId)
+
+    // Override the info bar with scenario name + guiding question on two lines
+    const infoBar = document.getElementById('infoBar')
+    if (infoBar) {
+      infoBar.style.background = SCENARIO_CONFIG[scenarioId].color + 'CC'
+      infoBar.style.color = '#fff'
+      infoBar.innerHTML =
+        SCENARIO_CONFIG[scenarioId].name +
+        '<br><span style="font-size:13px; opacity:0.85;">What is the flood level against your height?</span>'
+    }
   }
 
   const hideTarget = ({detail}) => {
