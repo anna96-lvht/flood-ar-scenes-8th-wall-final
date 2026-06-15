@@ -171,6 +171,10 @@ const imageTargetPipelineModule = () => {
 
     XR8.XrController.updateCameraProjectionMatrix({ origin: camera.position, facing: camera.quaternion })
 
+    // Default info bar before any card is detected
+    const infoBar = document.getElementById('infoBar')
+    if (infoBar) infoBar.textContent = 'What is the flood level against your height?'
+
     // Pre-build one anchor group per scenario. createCardCuboid attaches the
     // water volume and height markers as children of that group. showTarget
     // then moves/rotates the group to match the detected card each frame.
@@ -205,6 +209,12 @@ const imageTargetPipelineModule = () => {
 
     activeScenarioId = scenarioId
     updateFactorPanel(scenarioId)
+
+    // Filter beds card: override infoBar with mitigation message (no cuboid for this scenario)
+    if (scenarioId === 'zone_filterbeds') {
+      const infoBar = document.getElementById('infoBar')
+      if (infoBar) infoBar.textContent = 'Flood mitigation below current level'
+    }
   }
 
   const hideTarget = ({detail}) => {
